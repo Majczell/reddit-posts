@@ -1,5 +1,9 @@
 import React, { Component } from 'react';
 import { AppRegistry, Button, Image, ListView, Text, TouchableOpacity, WebView, View } from 'react-native';
+import RNFS from 'react-native-fs';
+
+const cacheDir = RNFS.CachesDirectoryPath;
+const cacheFilePath = `${cacheDir}/redditPosts.json`;
 
 export default class PostsList extends Component {
   constructor() {
@@ -8,6 +12,7 @@ export default class PostsList extends Component {
     const ds = new ListView.DataSource({rowHasChanged: (r1, r2) => r1 !== r2});
     this.state = {
       posts: ds,
+      ready: false,
     };
   }
 
@@ -15,35 +20,74 @@ export default class PostsList extends Component {
     this.getData();
   }
 
+  async saveDataToDevice(posts) {
+    Promise.all(posts.map(post => {
+      if (!post.thumbnail) {
+        return;
+      }
+      return RNFS.downloadFile({
+        fromUrl: post.thumbnail,
+        toFile: `${cacheDir}/image-${post.id}.jpg`,
+      }).promise;
+    }));
+
+    await RNFS.writeFile(cacheFilePath, JSON.stringify(posts));
+  }
+
+  async loadData() {
+    let posts = [];
+    try {
+      posts = await RNFS.readFile(cacheFilePath);
+      posts = JSON.parse(posts);
+    } catch(e) {}
+
+    this.setState({
+      posts: this.state.posts.cloneWithRows(posts),
+      ready: true,
+    });
+  }
+
   getData() {
-    fetch('https://www.reddit.com/.json')
-      .then((r) => r.json())
-      .then((r) => {
-        const posts = r.data.children;
-        // console.log(posts);
-        this.setState({
-          posts: this.state.posts.cloneWithRows(posts),
-        });
-      });
+    (async () => {
+      let posts;
+      try {
+        posts = await fetch('https://www.reddit.com/.json'); 
+      } catch(e) {}
+      if (posts) {
+        posts = await posts.json();
+        posts = posts.data.children.map((post, i) => ({
+          id: i,
+          url: post.data.url,
+          title: post.data.title,
+          thumbnail: post.data.thumbnail.indexOf('http') > -1 ? post.data.thumbnail : null,
+        }));
+        await this.saveDataToDevice(posts);
+      }
+      await this.loadData();
+    })();
   }
 
   renderPost(post) {
-    const { permalink: uri, thumbnail, title } = post.data;
+    const { id, url, thumbnail, title } = post;
+    let image;
+    if (thumbnail) {
+      image = (<Image
+        style={{ width: 100, height: 100 }}
+        source={{ uri: `file://${cacheDir}/image-${id}.jpg` }}
+      />);
+    }
     return (<View>
       <TouchableOpacity
         onPress={() => this.props.navigation.navigate('singlePost', {
           title,
-          uri: `https://reddit.com${uri}`,
+          uri: url,
         })}
       >
         <View style={{ 
           padding: 10,
           alignItems: 'center',
         }}>
-          <Image
-            style={{ width: 100, height: 100 }}
-            source={{ uri: thumbnail }}
-          />
+          {image}
           <Text style={{
             marginTop: 5,
             fontSize: 14,  
@@ -60,18 +104,26 @@ export default class PostsList extends Component {
   }
 
   render () {
-    let posts = this.state.posts;
+    let { posts, ready } = this.state;
     let postsView = (<Text style={{
       textAlign: 'center',
       fontSize: 24,
       margin: 10,
-    }}>Brak wpisów</Text>);
+    }}>Ładowanie wpisów...</Text>);
+
+    if (ready) {
+      postsView = (<Text style={{
+        textAlign: 'center',
+        fontSize: 24,
+        margin: 10,
+      }}>Brak wpisów</Text>);
+    }
 
     if (posts.getRowCount() > 0) {
       postsView = (<ListView
-          dataSource={posts}
-          renderRow={(post) => this.renderPost(post)}
-        />);
+        dataSource={posts}
+        renderRow={(post) => this.renderPost(post)}
+      />);
     }
     return (
       <View>
