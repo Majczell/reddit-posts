@@ -57,7 +57,7 @@ export default class PostsList extends Component {
         posts = await posts.json();
         posts = posts.data.children.map((post, i) => ({
           id: i,
-          url: post.data.url,
+          url: `https://reddit.com${post.data.permalink}`,
           title: post.data.title,
           thumbnail: post.data.thumbnail.indexOf('http') > -1 ? post.data.thumbnail : null,
         }));
@@ -72,7 +72,7 @@ export default class PostsList extends Component {
     let image;
     if (thumbnail) {
       image = (<Image
-        style={{ width: 100, height: 100 }}
+        style={{ width: 80, height: 80, borderRadius: 40 }}
         source={{ uri: `file://${cacheDir}/image-${id}.jpg` }}
       />);
     }
@@ -85,19 +85,21 @@ export default class PostsList extends Component {
       >
         <View style={{ 
           padding: 10,
-          alignItems: 'center',
+          // alignItems: 'center',
+          flexDirection: 'row',
         }}>
           {image}
           <Text style={{
-            marginTop: 5,
-            fontSize: 14,  
+            // marginTop: 5,
+            // fontSize: 14,
+            flex: 1,
+            paddingLeft: 5,
           }}>{title}</Text>
         </View>
       </TouchableOpacity>
       <View style={{
         backgroundColor: '#D3D3D3',
         height: 1,
-        margin: 5,
         alignSelf: 'stretch',
       }} />
     </View>);
